@@ -5,7 +5,7 @@
 
       <div class="current">
         <span>{{ currentWeight.weight }}</span>
-        <small>Current weight (kg) </small>
+        <small>Current weight (kg)</small>
       </div>
 
       <form @submit.prevent="addWeight">
@@ -23,11 +23,9 @@
         <div class="weight-history">
           <h2>Weight History</h2>
           <ul>
-            <li v-for="weight in weights" :key="weight">
+            <li v-for="weight in weights" :key="weight.date">
               <span>{{ weight.weight }}kg</span>
-              <small>
-                {{ new Date(weight.date).toLocaleDateString() }}
-              </small>
+              <small>{{ new Date(weight.date).toLocaleDateString() }}</small>
             </li>
           </ul>
         </div>
@@ -37,10 +35,16 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, watch, nextTick } from "vue";
+import { ref, shallowRef, computed, watch, onMounted, nextTick } from "vue";
 import Chart from "chart.js/auto";
 
-const weights = ref([]);
+// Load weights from localStorage
+const loadWeights = () => {
+  const savedWeights = localStorage.getItem("weights");
+  return savedWeights ? JSON.parse(savedWeights) : [];
+};
+
+const weights = ref(loadWeights());
 const weightCharEl = ref(null);
 
 const weightChart = shallowRef(null);
@@ -48,7 +52,9 @@ const weightChart = shallowRef(null);
 const weightInput = ref(60.0);
 
 const currentWeight = computed(() => {
-  return [...weights.value].reverse() || { weight: 0 };
+  return weights.value.length > 0
+    ? weights.value[weights.value.length - 1]
+    : { weight: 0 };
 });
 
 const addWeight = () => {
@@ -56,6 +62,8 @@ const addWeight = () => {
     weight: weightInput.value,
     date: new Date().getTime(),
   });
+  // Save weights to localStorage
+  localStorage.setItem("weights", JSON.stringify(weights.value));
 };
 
 watch(
@@ -109,6 +117,42 @@ watch(
   },
   { deep: true }
 );
+
+// Initialize the chart on mounted
+onMounted(() => {
+  if (weights.value.length > 0) {
+    nextTick(() => {
+      weightChart.value = new Chart(weightCharEl.value.getContext("2d"), {
+        type: "line",
+        data: {
+          labels: weights.value
+            .sort((a, b) => a.date - b.date)
+            .map((w) => new Date(w.date).toLocaleDateString())
+            .slice(-7),
+
+          datasets: [
+            {
+              label: "Weight",
+              data: weights.value
+                .sort((a, b) => a.date - b.date)
+                .map((w) => w.weight)
+                .slice(-7),
+              backgroundColor: "rgba(255, 105, 180, 0.2)",
+              borderColor: "rgb(255, 105, 180)",
+              borderWidth: 1,
+              fill: true,
+            },
+          ],
+        },
+
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+        },
+      });
+    });
+  }
+});
 </script>
 
 <style>
